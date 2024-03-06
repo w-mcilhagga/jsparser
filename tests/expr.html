@@ -1,0 +1,19 @@
+<script type="module">
+    import { Lexer } from '../jsparser.js'
+
+    let L = new Lexer({ number: /[0-9]+/ }, '+', '-', '*', '/', '(', ')')
+
+    import { node, match, bt, init_state, get_state, many } from '../jsparser.js'
+
+    let expr = node('expr', () => addend() && many(bt(() => add_op() && addend())))
+    let addend = node('addend', () => factor() && many(bt(() => mult_op() && factor())))
+    let factor = node('factor', () => bracket() || number())
+    let bracket = bt(() => match('(') && expr() && match(')'))
+    let number = () => match('number')
+    let add_op = () => match('+') || match('-')
+    let mult_op = () => match('*') || match('/')
+
+    init_state(L.tokenize('1*2+3'))
+    console.log(expr())
+    console.log(get_state())
+</script>
