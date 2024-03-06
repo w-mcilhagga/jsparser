@@ -243,11 +243,8 @@ export let {
     trace,
 } = create_parser()
 
-/** escapes a string to make a source string for a regular expression
- *  matching the string.
- *  @param s {string} - the string to turn into a regular expression source
- *  @returns {string}
- */
+// escapes a string to make a source string for a regular expression
+// matching the string
 function escaped(s) {
     return s.replaceAll(/[()*+?-[\]\\^${}|/]/g, (v) => '\\' + v)
 }
@@ -262,6 +259,7 @@ function escaped(s) {
  * @property {bool} keepws - set this if you want to keep whitespace
  * as tokens
  *
+ *  Any groups in a regex must be non capturing (?:...)
  *
  * @example For example, an input '1+2' might be converted into an array of three tokens
  * [
@@ -346,8 +344,10 @@ export class Lexer {
         // build a large regular expression by concatenating all the token
         // source strings into one. Each source string is in a capture group.
         for (let [k, v] of this.definitions) {
-            tokennames.push(k) // save the token name
-            src.push('(' + v + ')')
+            if (v) {
+                tokennames.push(k) // save the token name
+                src.push('(' + v + ')')
+            }
         }
         // the regular expression is global because it's used in matchAll
         let re = new RegExp(src.join('|'), 'g')
