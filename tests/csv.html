@@ -1,62 +1,6 @@
 <script type="module">
-    // RFC4180 style csv parser
+    import { csv } from './csv.js'
 
-    import { Lexer } from '../jsparser.js'
-
-    let L = new Lexer(
-        { quoted: /"(?:""|[^"])*"/ },
-        { quoted: /'(?:''|[^'])*'/ },
-        { crlf: /\r?\n/ },
-        { comma: ',' },
-        { whitespace: false }
-    )
-    L.unknownhandler = function (token) {
-        token.name = 'textdata'
-        return token
-    }
-
-    // make a private parser
-    import { create_parser } from '../jsparser.js'
-    let { node, match, eat, bt, init_state, get_state, many } = create_parser()
-
-    // abbreviations and helpers
-    let many_ = (p) => many(bt(p)),
-        _ = eat,
-        $ = match
-
-    let csvfile = () => file_with_header() || file()
-    let file_with_header = node('file_with_header', () => header() && file())
-    let header = node('header', () => record() && _('crlf'))
-    let file = node(
-        'file',
-        () => record() && many_(() => _('crlf') && record()) && (_('crlf') || true)
-    )
-    let record = node('record', () => field() && many_(() => _('comma') && field()))
-    let field = () => $('quoted') || $('textdata')
-
-    file.action(function (node) {
-        return { data: node.children }
-    })
-
-    file_with_header.action(function (node) {
-        return { ...node.children[0], ...node.children[1] }
-    })
-
-    header.action(function (node) {
-        return { header: node.children[0] }
-    })
-
-    record.action(function (node) {
-        return node.children.map((t) =>
-            t.name == 'quoted' ? t.text.slice(1, -1) : t.text
-        )
-    })
-
-    init_state(L.tokenize('"abc,d",efg"\r\n1,2\r\n3,4'))
-    console.log(csvfile())
-    console.log(get_state())
-
-    init_state(L.tokenize('"abc,d",efg"\n'))
-    console.log(csvfile())
-    console.log(get_state())
+    console.log(csv('"abc,d",efg"\r\n1,2\r\n3,4'))
+    console.log(csv('"abc,d",efg"\n'))
 </script>

@@ -28,19 +28,21 @@ let add_op = () => match('+') || match('-')
 let mult_op = () => match('*') || match('/')
 ```
 
-This is just plain javascript, with a few functions `match` and `many`, and a (hidden, global) parse state. Each of the parser functions will either change the parse state if they succeed and return `true`, or leave the parse state unchanged and return `false` if they fail.
+This is just plain javascript, with a few functions `match` and `many`, and a (hidden, shared) parse state. Each of the parser functions will either change the parse state if they succeed and return `true`, or leave the parse state unchanged and return `false` if they fail.
 
-The global parse state is an object `{tokens, next, ast}` where
+The parse state is an object `{tokens, next, ast}` where
 
 -   `tokens` is an array of token objects created by a tokenizer (see Tokenizers). Each token object has properties `name` and `text`: name is the name (type) of the token and text is the actual text value of the token. For example, a string like `1*2` might be tokenized to `[{name:'number', text:'1'}, {name:'*', 'text':'*'}, {name:'number', text:'3'}]`
 -   `next` points to the next token to be processed. It starts at zero.
 -   `ast` is the abstract syntax tree that will be built up by the parser. It starts as an empty array.
 
-The function `match(name)` checks that the current token `state.tokens[state.next]` has the given name. If so, the token is copied to the ast and the next pointer is incremented. You could implement `match` as
+The parse state is in a closure shared with the parser functions `match` and `many`. It can be accessed directly with functions `init_state`, `set_state` and `get_state`.
+
+The function `match(name)` checks that the current token in the shared state has the given name; that is, that `state.tokens[state.next].name == name` . If so, the token is copied to the ast and the next pointer is incremented. You could implement `match` as
 
 ```javascript
 function match(name) {
-    // global state
+    // shared state
     if (state.tokens[state.next].name == name) {
         state.next++
         return true
@@ -50,7 +52,7 @@ function match(name) {
 }
 ```
 
-The function `many(p)` implements the `*` operator in EBNF: it takes a parser function `p` and applies the parser as many times as it can to the global state. `many` could be implemented as follows:
+The function `many(p)` implements the `*` operator in EBNF: it takes a parser function `p` and applies the parser as many times as it can to the shared state. `many` could be implemented as follows:
 
 ```javascript
 function many(parser) {
@@ -69,7 +71,7 @@ Parsers must leave the parse state unchanged when they fail. Some of these parse
 let bracket = () => match('(') && expr() && match(')')
 ```
 
-If the first parser function `match('(')` succeeds, it will change the global parse state by advancing `state.next`. But then, if the second parser function `expr()` fails for some reason, then the `bracket` parser has failed but the state has been changed.
+If the first parser function `match('(')` succeeds, it will change the shared parse state by advancing `state.next`. But then, if the second parser function `expr()` fails for some reason, then the `bracket` parser has failed but the state has been changed.
 
 We have to to convert any parser function into one which is guaranteed to leave the parse state unchanged if it fails. We can do this by creating a backtracking function wrapper `bt`, which takes any parser and returns one that doesn't change the state if it fails:
 
@@ -88,12 +90,12 @@ Here is a possible implementation of these functions:
 
 ```javascript
 function save() {
-    // global state
+    // shared state
     return { next: state.next, astlen: state.ast.length }
 }
 
 function restore(saved) {
-    // global state
+    // shared state
     saved.state.next = saved.next
     saved.ast.length = saved.astlen
     return false
@@ -119,7 +121,7 @@ Likewise, no backtracking is needed for parsers that are an alternative (e.g. `f
 
 ## Constructing the Syntax Tree.
 
-If we take the parser `expr` and run it with a global state object
+If we take the parser `expr` and run it with a shared state object
 
 ```javascript
 {
@@ -164,7 +166,7 @@ if (result && state.ast.length > astlen) {
 }
 ```
 
-The best approach is to create a wrapper which turns a parser into one which creates a node when it succeeds:
+This code is put in a wrapper function which turns a parser into one which creates a node when it succeeds:
 
 ```javascript
 function node(nodename, parser) {
@@ -192,7 +194,7 @@ let add_op = () => match('+') || match('-')
 let mult_op = () => match('*') || match('/')
 ```
 
-If we run this parser on the previous input, we get
+Running this new parser on the previous input gives
 
 ```javascript
 {
@@ -233,6 +235,6 @@ It's often quite difficult to figure out what the problem is, especially if a lo
 let expr = node('expr', () => addend() && many(bt(() => add_op() && cut(1) && addend())))
 ```
 
-After the cut has been passed, if there is an addend everything is ok, but if the addend fails, the cut throws the parse state. By catching the state, you know what the problem is. Note that the cut alters the parse state to include a cut object `{at, label}` which says at which token the cut occurred, and the cut label (1 in this case).
+After the cut has been passed, if there is an addend everything is ok, but if the addend fails, the cut throws the parse state. By catching the state, you know what the problem is. Note that the cut alters the shared parse state to include a cut object `{at, label}` which says at which token the cut occurred, and the cut label (1 in this case).
 
-Now, when parsing `1+`, the parser will throw a state object which has `state.cut = {label:1, at:1}`, from which a meaningful error message can be constructed. `state.tokens[state.cut.at]` is the last token successfully parsed (in this case, '+').
+Now, when parsing `1+`, the parser will throw the shared state object which has `state.cut = {label:1, at:1}`, from which a meaningful error message can be constructed. `state.tokens[state.cut.at]` is the last token successfully parsed (in this case, '+').

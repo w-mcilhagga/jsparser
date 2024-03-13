@@ -119,19 +119,24 @@ export function create_parser(state) {
      * @returns {function} a backtracking parser function that creates a node.
      * A node parser can also execute actions following a successful parse.
      */
-    function node(name, parser, count = 0) {
+    function node(name, parser, min_children = 1) {
+        if (!parser) {
+            ;[name, parser] = ['', name]
+        }
         function nodefn() {
             let saved_state = save(),
                 result = parser()
-            if (result && state.ast.length - saved_state.astlen > count) {
+            if (result && state.ast.length - saved_state.astlen >= min_children) {
                 let node = { name, children: state.ast.slice(saved_state.astlen) }
-                state.ast.length = saved_state.astlen
                 // call actions here, if return falsy then this is a parse failure
                 for (let action of nodefn.actions) {
-                    if (!(node = action(node))) {
+                    if ((node = action(node)) == false) {
                         return restore(saved_state)
                     }
                 }
+                // remove the child nodes from ast and push the new
+                // node in place
+                state.ast.length = saved_state.astlen
                 state.ast.push(node)
             }
             return result || restore(saved_state)
@@ -141,7 +146,7 @@ export function create_parser(state) {
         return nodefn
     }
 
-    let cnode = (name, parser) => node(name, parser, 1)
+    let cnode = (name, parser) => node(name, parser, 2)
 
     /** add an action to a node parser. This can also be done by calling parser.action(a)
      * @param {function} nodefn - a parser function returned by node(parser)
@@ -222,7 +227,7 @@ export function create_parser(state) {
     }
 }
 
-// our default parser
+// our default parser, for when you only need one
 export let {
     init_state,
     set_state,
